@@ -12,3 +12,4 @@ primary_region = "nrt"
 [env]
   PLATE_PATTERN = "*35"
   LASTJSON_PATH = "/data/last.json"
+  CHECK_INTERVAL = "10m"
