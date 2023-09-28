@@ -154,7 +154,7 @@ func main() {
 	}
 
 	var newPlates []Plate
-	for p, _ := range chk {
+	for p := range chk {
 		newPlates = append(newPlates, p)
 	}
 
