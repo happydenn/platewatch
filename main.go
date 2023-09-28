@@ -117,10 +117,10 @@ func queryPlates(pattern string) ([]Plate, error) {
 	return nil, errors.New("maximum retries reached")
 }
 
-func checkPlates(pat, topic string) {
+func checkPlates(pat, lastfile, topic string) {
 	var lastRes []Plate
 
-	lf, err := os.ReadFile("last.json")
+	lf, err := os.ReadFile(lastfile)
 	if err == nil {
 		json.Unmarshal(lf, &lastRes)
 	}
@@ -136,7 +136,7 @@ func checkPlates(pat, topic string) {
 	log.Printf("current=%+v", res)
 
 	cf, _ := json.Marshal(res)
-	os.WriteFile("last.json", cf, 0666)
+	os.WriteFile(lastfile, cf, 0666)
 
 	chk := map[Plate]bool{}
 	for _, p := range res {
@@ -189,14 +189,21 @@ func main() {
 		intvl = "5m"
 	}
 
+	lastfile := os.Getenv("LASTJSON_PATH")
+	if lastfile == "" {
+		lastfile = "last.json"
+	}
+
 	topic := os.Getenv("NTFY_TOPIC")
 
 	c := cron.New()
 
-	checkFunc := func() { checkPlates(pat, topic) }
+	checkFunc := func() { checkPlates(pat, lastfile, topic) }
 	c.AddFunc(fmt.Sprintf("@every %s", intvl), checkFunc)
 
 	log.Printf("Monitoring for new plates matching %s every %s", pat, intvl)
+	log.Printf("Monitor state is saved to %s", lastfile)
+
 	c.Start()
 	go checkFunc()
 
