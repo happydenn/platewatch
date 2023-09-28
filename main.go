@@ -5,15 +5,20 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	api2captcha "github.com/2captcha/2captcha-go"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/imroc/req/v3"
+	"github.com/robfig/cron/v3"
 )
 
 var solver *api2captcha.Client
@@ -112,19 +117,7 @@ func queryPlates(pattern string) ([]Plate, error) {
 	return nil, errors.New("maximum retries reached")
 }
 
-func main() {
-	apiKey := os.Getenv("TWOCAPTCHA_API_KEY")
-	if apiKey == "" {
-		log.Fatal("TWOCAPTCHA_API_KEY is required")
-	}
-
-	pat := os.Getenv("PLATE_PATTERN")
-	if pat == "" {
-		log.Fatal("PLATE_PATTERN is required")
-	}
-
-	init2CaptchaClient(apiKey)
-
+func checkPlates(pat, topic string) {
 	var lastRes []Plate
 
 	lf, err := os.ReadFile("last.json")
@@ -136,7 +129,8 @@ func main() {
 
 	res, err := queryPlates(pat)
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("queryPlates error: %v", err)
+		return
 	}
 
 	log.Printf("current=%+v", res)
@@ -163,4 +157,50 @@ func main() {
 	})
 
 	log.Printf("new=%+v", newPlates)
+
+	if topic != "" {
+		log.Printf("sending notification to %s", topic)
+
+		var plateNumbers []string
+		for _, p := range newPlates {
+			plateNumbers = append(plateNumbers, p.Number)
+		}
+
+		msg := fmt.Sprintf("新車牌釋出: %s", strings.Join(plateNumbers, ", "))
+		http.Post(fmt.Sprintf("https://ntfy.sh/%s", topic), "text/plain", strings.NewReader(msg))
+	}
+}
+
+func main() {
+	apiKey := os.Getenv("TWOCAPTCHA_API_KEY")
+	if apiKey == "" {
+		log.Fatal("TWOCAPTCHA_API_KEY is required")
+	}
+
+	init2CaptchaClient(apiKey)
+
+	pat := os.Getenv("PLATE_PATTERN")
+	if pat == "" {
+		log.Fatal("PLATE_PATTERN is required")
+	}
+
+	intvl := os.Getenv("CHECK_INTERVAL")
+	if intvl == "" {
+		intvl = "5m"
+	}
+
+	topic := os.Getenv("NTFY_TOPIC")
+
+	c := cron.New()
+
+	checkFunc := func() { checkPlates(pat, topic) }
+	c.AddFunc(fmt.Sprintf("@every %s", intvl), checkFunc)
+
+	log.Printf("Monitoring for new plates matching %s every %s", pat, intvl)
+	c.Start()
+	go checkFunc()
+
+	done := make(chan os.Signal, 1)
+	signal.Notify(done, syscall.SIGINT, syscall.SIGTERM)
+	<-done
 }

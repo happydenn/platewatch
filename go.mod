@@ -6,6 +6,7 @@ require (
 	github.com/2captcha/2captcha-go v1.1.2
 	github.com/PuerkitoBio/goquery v1.8.1
 	github.com/imroc/req/v3 v3.42.0
+	github.com/robfig/cron/v3 v3.0.1
 )
 
 require (
