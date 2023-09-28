@@ -158,7 +158,7 @@ func checkPlates(pat, topic string) {
 
 	log.Printf("new=%+v", newPlates)
 
-	if topic != "" {
+	if len(newPlates) > 0 && topic != "" {
 		log.Printf("sending notification to %s", topic)
 
 		var plateNumbers []string
