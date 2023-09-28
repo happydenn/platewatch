@@ -117,7 +117,7 @@ func queryPlates(pattern string) ([]Plate, error) {
 	return nil, errors.New("maximum retries reached")
 }
 
-func checkPlates(pat, lastfile, topic string) {
+func checkPlates(pat, lastfile, topic, dchook string) {
 	var lastRes []Plate
 
 	lf, err := os.ReadFile(lastfile)
@@ -158,16 +158,31 @@ func checkPlates(pat, lastfile, topic string) {
 
 	log.Printf("new=%+v", newPlates)
 
-	if len(newPlates) > 0 && topic != "" {
-		log.Printf("sending notification to %s", topic)
+	if len(newPlates) > 0 {
+		if dchook != "" {
+			log.Printf("sending message to discord")
 
-		var plateNumbers []string
-		for _, p := range newPlates {
-			plateNumbers = append(plateNumbers, p.Number)
+			var plateNumbers []string
+			for _, p := range newPlates {
+				plateNumbers = append(plateNumbers, p.Number)
+			}
+
+			msg := fmt.Sprintf("新車牌釋出: %s", strings.Join(plateNumbers, ", "))
+			data, _ := json.Marshal(map[string]string{"content": msg})
+			http.Post(dchook, "application/json", bytes.NewReader(data))
 		}
 
-		msg := fmt.Sprintf("新車牌釋出: %s", strings.Join(plateNumbers, ", "))
-		http.Post(fmt.Sprintf("https://ntfy.sh/%s", topic), "text/plain", strings.NewReader(msg))
+		if topic != "" {
+			log.Printf("sending notification to %s", topic)
+
+			var plateNumbers []string
+			for _, p := range newPlates {
+				plateNumbers = append(plateNumbers, p.Number)
+			}
+
+			msg := fmt.Sprintf("新車牌釋出: %s", strings.Join(plateNumbers, ", "))
+			http.Post(fmt.Sprintf("https://ntfy.sh/%s", topic), "text/plain", strings.NewReader(msg))
+		}
 	}
 }
 
@@ -195,10 +210,11 @@ func main() {
 	}
 
 	topic := os.Getenv("NTFY_TOPIC")
+	dchook := os.Getenv("DISCORD_WEBHOOK_URL")
 
 	c := cron.New()
 
-	checkFunc := func() { checkPlates(pat, lastfile, topic) }
+	checkFunc := func() { checkPlates(pat, lastfile, topic, dchook) }
 	c.AddFunc(fmt.Sprintf("@every %s", intvl), checkFunc)
 
 	log.Printf("Monitoring for new plates matching %s every %s", pat, intvl)
